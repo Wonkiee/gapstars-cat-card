@@ -1,0 +1,17 @@
+{
+  "name": "cat-card",
+  "version": "1.0.0",
+  "description": "Gapstars Cat Card Application",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@mapbox/blend": "^2.0.1",
+    "minimist": "^1.2.5",
+    "request": "^2.88.2"
+  }
+}
