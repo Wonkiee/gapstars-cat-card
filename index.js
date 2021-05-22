@@ -12,7 +12,7 @@ const {
   color = 'Pink',
   size = 100,
 } = argv;
-const BASE_URL = 'https://cataas.com/cat/';
+const BASE_URL = 'https://cataas.com/';
 const GET_CAT_PATH = 'cat/says/';
 const ENCODING_TYPE = 'binary';
 const IMAGE_NAME = 'cat-card';
@@ -20,10 +20,18 @@ const IMAGE_EXTENSIONS = {
   JPEG: 'jpeg',
   JPG: 'jpg'
 }
+const firstRequest = {
+  url: `${BASE_URL}${GET_CAT_PATH}${greeting}?width=${width}&height=${height}&color${color}&s=${size}`,
+  encoding: ENCODING_TYPE
+};
+const secondRequest = {
+  url: `${BASE_URL}${GET_CAT_PATH}${who}?width=${width}&height=${height}&color${color}&s=${size}`,
+  encoding: ENCODING_TYPE
+};
 
 /**
  * This function forms the image object array to bind images.
- * 
+ *
  * @param  {Array} images - Image object array
  */
 const getImageObjectArrayForBinding = (images) => {
@@ -42,71 +50,85 @@ const getImageObjectArrayForBinding = (images) => {
 }
 
 /**
- * This function fetches the images form the server.
+ * Sends a get request and gets the response.
  * 
- * @param  {Object} firstReq - First request object.
- * @param  {Object} secondReq - Second request object.
- * @param  {Function} callback - callback function
+ * @param  {Object} req - request details.
  */
-const getImages = (firstReq, secondReq, callback) => {
-  return request.get(firstReq, (firstReqError, firstReqRes, firstBody) => {
-    if (firstReqError) {
-      console.log(`Error when retrieving the response for the first request: ${firstReqError}`);
-      return callback(firstReqError);
-    }
-    console.log(`Received response for first request with status: ${firstReqRes.statusCode}`);
-    return request.get(secondReq, (secondReqError, secondReqRes, secondBody) => {
-      if (secondReqError) {
-        console.log(`Error when retrieving the response for the second request: ${secondReqError}`);
-        return callback(secondReqError);
+const sendGetRequest = (req) => {
+  return new Promise((resolve, reject) => {
+    return request.get(req, (err, res, body) => {
+      if (err) {
+        console.log(`Error when retrieving the response for the first request: ${err}`);
+        return reject(err);
       }
-      console.log(`Received response for second request with status: ${secondReqRes.statusCode}`);
-      return callback(null, [firstBody, secondBody]);
+      console.log(`Received response for the request with status: ${res.statusCode}`);
+      return resolve(body);
     });
   });
 }
 
 /**
+ * This function fetches the images form the server.
+ *
+ * @param  {Object} firstReq - First request object.
+ * @param  {Object} secondReq - Second request object.
+ */
+const getImages = async (firstReq, secondReq) => {
+  try {
+    const firstResponse = await sendGetRequest(firstReq);
+    const secondResponse = await sendGetRequest(secondReq);
+    return Promise.resolve([firstResponse, secondResponse]);
+  }
+  catch (error) {
+    console.log(`Error wen fetching images from the server. Error: ${error}`);
+    return Promise.reject(error);
+  }
+};
+
+/**
  * This method binds images together.
  *
  * @param  {Object} imageObjArray - Image objects to be bounded.
- * @param  {Function} callback - callback function
  */
-const bindImages = (imageObjArray, callback) => {
-  return blend(imageObjArray, {
-    width: width * 2,
-    height: height,
-    format: IMAGE_EXTENSIONS.jpeg,
-  }, (err, data) => {
-    if (err) {
-      console.log(`Error while binding images. Error: ${err}`);
-      return callback(err);
-    }
-    console.log('The file binding was successfull!');
-    return callback(null, data);
-  });
-}
+const bindImages = (imageObjArray) => (
+  new Promise((resolve, reject) =>
+    blend(imageObjArray, {
+      width: width * 2,
+      height: height,
+      format: IMAGE_EXTENSIONS.jpeg,
+    }, (err, data) => {
+      if (err) {
+        console.log(`Error while binding images. Error: ${err}`);
+        return reject(err);
+      }
+      console.log('The file binding was successfull!');
+      return resolve(data);
+    })
+  )
+);
 
 /**
  * This method writes image data to a file
  *
  * @param  {Object} data - Data to be saved.
  * @param  {Object} imageDetails - Image details
- * @param  {Function} callback - Callback function.
  */
-const saveImage = (data, imageDetails, callback) => {
+const saveImages = (data, imageDetails) => {
   if (!imageDetails || !imageDetails.name || !imageDetails.extension) {
-    return callback("Image details are missing");
+    return Promise.reject("Image details are missing");
   }
   const fileOut = join(process.cwd(), `/${imageDetails.name}.${imageDetails.extension}`);
-  return writeFile(fileOut, data, ENCODING_TYPE, (err) => {
-    if (err) {
-      console.log(`Error while saving the file. Error: ${err}`);
-      return callback(err);
-    }
-    console.log('The file was saved!');
-    return callback(null);
-  });
+  return new Promise ((resolve, reject) => (
+      writeFile(fileOut, data, ENCODING_TYPE, (err) => {
+        if (err) {
+          console.log(`Error while saving the file. Error: ${err}`);
+          return reject(err);
+        }
+        console.log('The file was saved!');
+        return resolve(true);
+      })
+    )
+  )
 }
 
 /**
@@ -114,48 +136,24 @@ const saveImage = (data, imageDetails, callback) => {
  * User can create the card with a custom name and extension. Default name and extensions will be used
  * if those are not provided.
  *
- * @param {Object} imageDetails - Contains image details
- * @param {Function} callback - Callback function
+ * @param  {Object} imageDetails - contains image details
  */
-const createCatCard = (imageDetails, callback) => {
-  const firstReq = {
-    url: `${BASE_URL}${GET_CAT_PATH}${greeting}?width=${width}&height=${height}&color${color}&s=${size}`,
-    encoding: ENCODING_TYPE
-  };
-  const secondReq = {
-    url: `${BASE_URL}${GET_CAT_PATH}${who}?width=${width}&height=${height}&color${color}&s=${size}`,
-    encoding: ENCODING_TYPE
-  };
-  return getImages(firstReq, secondReq, (imageFetchError, images) => {
-    if (imageFetchError) {
-      return callback(imageFetchError);
-    }
-    const imageObjArray = getImageObjectArrayForBinding(images);
-    return bindImages(imageObjArray, (imageBindError, data) => {
-      if (imageBindError) {
-        return callback(imageBindError);
-      }
-      return saveImage(data, {
-        name: imageDetails.name,
-        extension: imageDetails.extension
-      }, (imageSaveError, res) => {
-        if (imageSaveError) {
-          return callback(imageSaveError);
-        }
-        return callback(null);
-      });
-    })
-  })
+const createCatCard = async (imageDetails) => {
+  console.log("Start Cat Card Creation...");
+  try {
+    const images =  await getImages(firstRequest, secondRequest);
+    const data = await bindImages(getImageObjectArrayForBinding(images));
+    await saveImages(data, {
+      name: imageDetails.name,
+      extension: imageDetails.extension
+    });
+  }
+  catch (error) {
+    console.log(`Cat Card creation is unsuccessful. Error: ${error}`);
+  }
 }
 
-console.log("Start Cat Card Creation...");
 createCatCard({
   name: IMAGE_NAME,
   extension: IMAGE_EXTENSIONS.JPG
-}, (err, res) => {
-  if (err) {
-    console.log(`Cat Card creation is unsuccessful. Error: ${err}`);
-    return;
-  }
-  console.log("Cat Card creation is completed successfully...!");
 });
